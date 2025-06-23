@@ -1,0 +1,11 @@
+# build files
+/artifacts
+/schema
+/target
+/tmp
+
+# cargo + git helper file
+.cargo-ok
+
+# cw-pipeline log file
+cw-pipeline.log

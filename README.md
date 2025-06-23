@@ -1,11 +1,6 @@
-# soulp
-`soulp` was generated with `cw-pipeline`.
+# SouLP
+Permanently locked liquidity tokens.
 
-Following is a list of relevant and helpful CLI tools you may use:
+SouLP wrap DEX liquidity tokens and prevent liquidity from ever being released (provided Admin has been relinquished). The SouLP tokens themselves are tradeable, but the liquidity they represent are locked forever. As such, SouLP tokens represent a commitment to a project's longevity.
 
-- `cw-pipeline build` - build your project for development or production.
-- `cw-pipeline test` - run unit tests of your project.
-- `cw-pipeline store` - upload & store the project's .wasm contract file (aka *code*).
-- `cw-pipeline instantiate` - instantiate an uploaded contract *code*. Not bound to this project.
-- `cw-pipeline exec` - execute a transaction on a contract instance. Not bound to this project.
-- `cw-pipeline query` - run a *smart query* on a contract instance. Not bound to this project.
+As they wrap existing DEX LPs, they must be specialized for the chain & DEX LP variants you wish to support.

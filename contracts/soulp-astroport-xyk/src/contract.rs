@@ -15,11 +15,17 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn instantiate(
   deps: DepsMut,
   _env: Env,
-  _info: MessageInfo,
-  _msg: InstantiateMsg,
+  info: MessageInfo,
+  msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
   set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-  unimplemented!();
+
+  let state = State {
+    pool: msg.pool,
+    evacuate_address: info.sender.to_string(),
+  };
+
+  STATE.save(deps.storage, &state)?;
 
   Ok(Response::new()
     .add_attribute("method", "instantiate")
@@ -30,17 +36,30 @@ pub fn instantiate(
 mod tests {
   use super::*;
   use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-  use cosmwasm_std::{coins, from_json};
+  use cosmwasm_std::coins;
 
   #[test]
-  fn dummy_test() {
+  fn test_instantiate() {
     let mut deps = mock_dependencies();
 
-    let msg = InstantiateMsg {};
-    let info = mock_info("creator", &coins(1000, "earth"));
+    let pool = "pool_token_address".to_string();
+    let creator = "creator_address".to_string();
 
-    // we can just call .unwrap() to assert this was a success
+    let msg = InstantiateMsg { pool: pool.clone() };
+    let info = mock_info(&creator, &coins(1000, "earth"));
+
+    // Call instantiate
     let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+    // Check response
     assert_eq!(0, res.messages.len());
+    assert_eq!(1, res.attributes.len());
+    assert_eq!("method", res.attributes[0].key);
+    assert_eq!("instantiate", res.attributes[0].value);
+
+    // Check state was saved correctly
+    let state = STATE.load(deps.as_ref().storage).unwrap();
+    assert_eq!(state.pool, pool);
+    assert_eq!(state.evacuate_address, creator);
   }
 }

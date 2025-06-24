@@ -1,17 +1,13 @@
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
-name = "soulp"
+name = "test-utils"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# use library feature to disable all instantiate/execute/query exports
-library = []
 
 [dependencies]
 cosmwasm-schema.workspace = true
@@ -24,8 +20,3 @@ prost.workspace = true
 schemars.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-
-test-utils = { path = "../../packages/test-utils" }
-
-[dev-dependencies]
-cw-multi-test = "0.17"

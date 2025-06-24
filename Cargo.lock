@@ -775,6 +775,7 @@ dependencies = [
  "prost 0.14.1",
  "schemars",
  "serde",
+ "test-utils",
  "thiserror",
 ]
 
@@ -833,6 +834,22 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "test-utils"
+version = "0.1.0"
+dependencies = [
+ "cosmwasm-schema",
+ "cosmwasm-std",
+ "cw-storage-plus",
+ "cw2",
+ "cw20",
+ "cw721",
+ "prost 0.14.1",
+ "schemars",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

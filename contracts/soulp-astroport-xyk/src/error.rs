@@ -9,6 +9,9 @@ pub enum ContractError {
   #[error("Unauthorized")]
   Unauthorized {},
 
+  #[error("Invalid funds: {0}")]
+  InvalidFunds(String),
+
   #[error("{0}")]
   Generic(String),
 

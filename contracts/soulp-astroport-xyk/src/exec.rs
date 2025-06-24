@@ -1,16 +1,16 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response, WasmMsg};
-use cw20::{Cw20Coin, Cw20Contract, Cw20ExecuteMsg};
+use cw20::{Cw20Contract, Cw20ExecuteMsg};
 use cw721::Cw721ExecuteMsg;
 
 use crate::state::{State, STATE};
+use crate::tokenfactory::MsgMint;
 use crate::{ContractError, ContractResult};
 use crate::msg::{EvacuateAsset, ExecuteMsg};
 
 struct ExecuteContext<'a> {
   deps: DepsMut<'a>,
-  #[allow(dead_code)]
   env: Env,
   info: MessageInfo,
 }
@@ -34,8 +34,27 @@ pub fn execute(
   Ok(Response::new())
 }
 
-fn deposit(_ctx: &mut ExecuteContext) -> ContractResult<Response> {
-  unimplemented!()
+fn deposit(ctx: &mut ExecuteContext) -> ContractResult<Response> {
+  if ctx.info.funds.len() != 1 {
+    return Err(ContractError::InvalidFunds("Expected exactly one asset".to_string()));
+  }
+
+  let state = STATE.load(ctx.deps.storage)?;
+
+  let fund = &ctx.info.funds[0];
+  if fund.denom != state.pool {
+    return Err(ContractError::InvalidFunds("Invalid asset".to_string()));
+  }
+
+  // NOTE: if this is a non-standard TokenFactory we may need to adjust the messages here
+  Ok(Response::new()
+    .add_message(MsgMint::subdenom(
+      &ctx.env,
+      &"SouLP",
+      fund.amount,
+      ctx.info.sender.clone()
+    ))
+  )
 }
 
 fn evacuate(ctx: &mut ExecuteContext, asset: EvacuateAsset) -> ContractResult<Response> {
@@ -101,12 +120,12 @@ fn change_evacuate_address(ctx: &mut ExecuteContext, new_address: String) -> Con
 
 #[cfg(test)]
 mod test {
+  use super::*;
   use std::marker::PhantomData;
-
-use super::*;
   use cosmwasm_std::{coin, coins, to_json_binary, BankMsg, CosmosMsg, DepsMut, Empty, OwnedDeps, Querier, QuerierResult, QueryRequest, SubMsg, WasmMsg, WasmQuery};
   use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockStorage};
   use cw20::{BalanceResponse, Cw20QueryMsg};
+  use prost::Message;
 
   // Custom querier to handle CW20 queries
   struct MockQuerier {
@@ -409,5 +428,101 @@ use super::*;
     assert_eq!(result.attributes.len(), 1);
     assert_eq!(result.attributes[0].key, "action");
     assert_eq!(result.attributes[0].value, "evacuate");
+  }
+
+  #[test]
+  fn test_deposit_success() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("sender", &coins(100, "pool_token"));
+    setup_test_state(&mut deps.as_mut());
+
+    let mut ctx = ExecuteContext { deps: deps.as_mut(), env: env.clone(), info };
+    let result = deposit(&mut ctx).unwrap();
+
+    // Should have 1 message (MsgMint)
+    assert_eq!(result.messages.len(), 1);
+    assert_eq!(result.attributes.len(), 0);
+
+    // Check that the message is a Stargate message for MsgMint
+    match &result.messages[0] {
+      SubMsg { msg: CosmosMsg::Stargate { type_url, value }, .. } => {
+        assert_eq!(type_url, "/osmosis.tokenfactory.v1beta1.MsgMint");
+
+        // Decode the MsgMint to verify its contents
+        let msg_mint = crate::tokenfactory::MsgMint::decode(value.as_slice()).unwrap();
+        assert_eq!(msg_mint.sender, env.contract.address.to_string());
+        assert_eq!(msg_mint.mint_to_address, "sender");
+
+        // Check the minted amount
+        let amount = msg_mint.amount.unwrap();
+        assert_eq!(amount.denom, format!("factory/{}/SouLP", env.contract.address));
+        assert_eq!(amount.amount, "100");
+      }
+      _ => panic!("Expected Stargate message"),
+    }
+  }
+
+  #[test]
+  fn test_deposit_no_funds() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("sender", &[]);
+    setup_test_state(&mut deps.as_mut());
+
+    let mut ctx = ExecuteContext { deps: deps.as_mut(), env, info };
+    let result = deposit(&mut ctx);
+
+    // Should return error for no funds
+    assert!(result.is_err());
+    match result.unwrap_err() {
+      ContractError::InvalidFunds(msg) => {
+        assert_eq!(msg, "Expected exactly one asset");
+      }
+      _ => panic!("Expected InvalidFunds error"),
+    }
+  }
+
+  #[test]
+  fn test_deposit_multiple_funds() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("sender", &coins(100, "pool_token"));
+    let mut funds = info.funds.clone();
+    funds.push(coin(50, "uatom"));
+    let info = mock_info("sender", &funds);
+    setup_test_state(&mut deps.as_mut());
+
+    let mut ctx = ExecuteContext { deps: deps.as_mut(), env, info };
+    let result = deposit(&mut ctx);
+
+    // Should return error for multiple funds
+    assert!(result.is_err());
+    match result.unwrap_err() {
+      ContractError::InvalidFunds(msg) => {
+        assert_eq!(msg, "Expected exactly one asset");
+      }
+      _ => panic!("Expected InvalidFunds error"),
+    }
+  }
+
+  #[test]
+  fn test_deposit_wrong_asset() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+    let info = mock_info("sender", &coins(100, "uatom")); // Wrong asset
+    setup_test_state(&mut deps.as_mut());
+
+    let mut ctx = ExecuteContext { deps: deps.as_mut(), env, info };
+    let result = deposit(&mut ctx);
+
+    // Should return error for wrong asset
+    assert!(result.is_err());
+    match result.unwrap_err() {
+      ContractError::InvalidFunds(msg) => {
+        assert_eq!(msg, "Invalid asset");
+      }
+      _ => panic!("Expected InvalidFunds error"),
+    }
   }
 }

@@ -46,12 +46,14 @@ fn deposit(ctx: &mut ExecuteContext) -> ContractResult<Response> {
     return Err(ContractError::InvalidFunds("Invalid asset".to_string()));
   }
 
+  let mint_amount = fund.amount * state.mint_ratio;
+
   // NOTE: if this is a non-standard TokenFactory we may need to adjust the messages here
   Ok(Response::new()
     .add_message(MsgMint::subdenom(
       &ctx.env,
       &"SouLP",
-      fund.amount,
+      mint_amount,
       ctx.info.sender.clone()
     ))
   )
@@ -122,7 +124,7 @@ fn change_evacuate_address(ctx: &mut ExecuteContext, new_address: String) -> Con
 mod test {
   use super::*;
   use std::marker::PhantomData;
-  use cosmwasm_std::{coin, coins, BankMsg, CosmosMsg, DepsMut, Empty, OwnedDeps, SubMsg, WasmMsg};
+  use cosmwasm_std::{coin, coins, BankMsg, CosmosMsg, DepsMut, Empty, OwnedDeps, SubMsg, WasmMsg, Decimal};
   use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockStorage};
   use prost::Message;
   use test_utils::mock_querier::MockQuerier;
@@ -131,6 +133,7 @@ mod test {
     let state = State {
       pool: "pool_token".to_string(),
       evacuate_address: "evacuate_addr".to_string(),
+      mint_ratio: Decimal::percent(100),
     };
     STATE.save(deps.storage, &state).unwrap();
   }
@@ -390,10 +393,49 @@ mod test {
         assert_eq!(msg_mint.sender, env.contract.address.to_string());
         assert_eq!(msg_mint.mint_to_address, "sender");
 
-        // Check the minted amount
+        // Check the minted amount (should be 100 * 1.0 = 100 since mint_ratio is 100%)
         let amount = msg_mint.amount.unwrap();
         assert_eq!(amount.denom, format!("factory/{}/SouLP", env.contract.address));
         assert_eq!(amount.amount, "100");
+      }
+      _ => panic!("Expected Stargate message"),
+    }
+  }
+
+  #[test]
+  fn test_deposit_with_mint_ratio() {
+    let mut deps = mock_dependencies();
+    let env = mock_env();
+
+    // Set up state with a different mint ratio (50%)
+    let state = State {
+      pool: "pool_token".to_string(),
+      evacuate_address: "evacuate_addr".to_string(),
+      mint_ratio: Decimal::percent(50),
+    };
+    STATE.save(deps.as_mut().storage, &state).unwrap();
+
+    let info = mock_info("sender", &coins(100, "pool_token"));
+    let mut ctx = ExecuteContext { deps: deps.as_mut(), env: env.clone(), info };
+    let result = deposit(&mut ctx).unwrap();
+
+    // Should have 1 message (MsgMint)
+    assert_eq!(result.messages.len(), 1);
+
+    // Check that the message is a Stargate message for MsgMint
+    match &result.messages[0] {
+      SubMsg { msg: CosmosMsg::Stargate { type_url, value }, .. } => {
+        assert_eq!(type_url, "/osmosis.tokenfactory.v1beta1.MsgMint");
+
+        // Decode the MsgMint to verify its contents
+        let msg_mint = crate::tokenfactory::MsgMint::decode(value.as_slice()).unwrap();
+        assert_eq!(msg_mint.sender, env.contract.address.to_string());
+        assert_eq!(msg_mint.mint_to_address, "sender");
+
+        // Check the minted amount (should be 100 * 0.5 = 50 since mint_ratio is 50%)
+        let amount = msg_mint.amount.unwrap();
+        assert_eq!(amount.denom, format!("factory/{}/SouLP", env.contract.address));
+        assert_eq!(amount.amount, "50");
       }
       _ => panic!("Expected Stargate message"),
     }

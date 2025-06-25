@@ -23,6 +23,7 @@ pub fn instantiate(
   let state = State {
     pool: msg.pool,
     evacuate_address: info.sender.to_string(),
+    mint_ratio: msg.mint_ratio,
   };
 
   STATE.save(deps.storage, &state)?;
@@ -36,7 +37,7 @@ pub fn instantiate(
 mod tests {
   use super::*;
   use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-  use cosmwasm_std::coins;
+  use cosmwasm_std::{coins, Decimal};
 
   #[test]
   fn test_instantiate() {
@@ -45,7 +46,10 @@ mod tests {
     let pool = "pool_token_address".to_string();
     let creator = "creator_address".to_string();
 
-    let msg = InstantiateMsg { pool: pool.clone() };
+    let msg = InstantiateMsg {
+      pool: pool.clone(),
+      mint_ratio: Decimal::percent(100),
+    };
     let info = mock_info(&creator, &coins(1000, "earth"));
 
     // Call instantiate
@@ -61,5 +65,6 @@ mod tests {
     let state = STATE.load(deps.as_ref().storage).unwrap();
     assert_eq!(state.pool, pool);
     assert_eq!(state.evacuate_address, creator);
+    assert_eq!(state.mint_ratio, Decimal::percent(100));
   }
 }

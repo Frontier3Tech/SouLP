@@ -1,8 +1,13 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
+use cosmwasm_std::Decimal;
 
 #[cw_serde]
 pub struct InstantiateMsg {
+  /// LP token address
   pub pool: String,
+  /// Mint ratio from pool token to SouLP. The ratio of LP tokens to assets is more or less
+  /// arbitrary, so this is intended to allow bringing it closer to the intended base asset.
+  pub mint_ratio: Decimal,
 }
 
 #[cw_serde]

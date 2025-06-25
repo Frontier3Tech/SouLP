@@ -25,6 +25,7 @@ schemars.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+impl = { path = "../../packages/impl" }
 test-utils = { path = "../../packages/test-utils" }
 
 [dev-dependencies]

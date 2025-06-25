@@ -3,14 +3,17 @@ use cosmwasm_std::entry_point;
 use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
 use cw2::set_contract_version;
 
-use crate::error::ContractError;
+use r#impl::ContractError;
+use r#impl::tokenfactory::{self, TFToken};
+
 use crate::msg::InstantiateMsg;
 use crate::state::{State, STATE};
-use crate::tokenfactory::MsgCreateDenom;
 
 // version info for migration info
 const CONTRACT_NAME: &str = env!("CARGO_PKG_NAME");
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub const SUBDENOM: &str = "SouLP";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -20,6 +23,8 @@ pub fn instantiate(
   msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
   set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+
+  let token = tokenfactory::osmosis::TFToken::new(env.contract.address, SUBDENOM.to_string());
 
   let state = State {
     pool: msg.pool,
@@ -34,10 +39,7 @@ pub fn instantiate(
     // NOTE that denom creation may incur a fee. You can query this fee from the module's params:
     // GET /osmosis/tokenfactory/v1beta1/params
     // Since the contract doesn't exist at this point yet, the fee must be sent in the `info.funds`.
-    .add_message(MsgCreateDenom {
-      sender: env.contract.address.to_string(),
-      subdenom: "SouLP".to_string(),
-    })
+    .add_messages(token.create())
   )
 }
 

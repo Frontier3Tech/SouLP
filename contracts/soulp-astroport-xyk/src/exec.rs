@@ -1,19 +1,15 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_json_binary, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response, WasmMsg};
-use cw20::{Cw20Contract, Cw20ExecuteMsg};
-use cw721::Cw721ExecuteMsg;
+use cosmwasm_std::{DepsMut, Env, MessageInfo, Response};
 
+use r#impl::execute::{ExecuteContext, Token};
+use r#impl::msg::EvacuateAsset;
+use r#impl::tokenfactory::{self, TFToken};
+
+use crate::contract::SUBDENOM;
 use crate::state::{State, STATE};
-use crate::tokenfactory::MsgMint;
 use crate::{ContractError, ContractResult};
-use crate::msg::{EvacuateAsset, ExecuteMsg};
-
-struct ExecuteContext<'a> {
-  deps: DepsMut<'a>,
-  env: Env,
-  info: MessageInfo,
-}
+use crate::msg::ExecuteMsg;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
@@ -48,62 +44,24 @@ fn deposit(ctx: &mut ExecuteContext) -> ContractResult<Response> {
 
   let mint_amount = fund.amount * state.mint_ratio;
 
+  let token = tokenfactory::osmosis::TFToken::new(ctx.env.contract.address.clone(), SUBDENOM.to_string());
+
   // NOTE: if this is a non-standard TokenFactory we may need to adjust the messages here
   Ok(Response::new()
-    .add_message(MsgMint::subdenom(
-      &ctx.env,
-      &"SouLP",
-      mint_amount,
-      ctx.info.sender.clone()
-    ))
+    .add_messages(token.mint(mint_amount, ctx.info.sender.to_string()))
   )
 }
 
 fn evacuate(ctx: &mut ExecuteContext, asset: EvacuateAsset) -> ContractResult<Response> {
   let state = STATE.load(ctx.deps.storage)?;
-  let mut messages: Vec<CosmosMsg> = vec![];
-  match asset {
-    EvacuateAsset::Native {} => {
-      let balances = ctx.deps.querier
-        .query_all_balances(ctx.env.contract.address.clone())?;
-      let balances = balances
-        .iter()
-        .filter(|balance| balance.denom != state.pool);
-      for balance in balances {
-        messages.push(BankMsg::Send {
-          to_address: state.evacuate_address.clone(),
-          amount: vec![balance.clone()],
-        }.into());
-      }
-    }
-    EvacuateAsset::Cw20 { contract } => {
-      let contract = ctx.deps.api.addr_validate(&contract)?;
-      let contract = Cw20Contract(contract);
-      let balance = Cw20Contract::balance(&contract, &ctx.deps.querier, ctx.env.contract.address.clone())?;
-      messages.push(WasmMsg::Execute {
-        contract_addr: contract.addr().to_string(),
-        msg: to_json_binary(&Cw20ExecuteMsg::Transfer {
-          recipient: state.evacuate_address.clone(),
-          amount: balance,
-        })?,
-        funds: vec![],
-      }.into());
-    }
-    EvacuateAsset::Cw721 { contract, token_ids } => {
-      for token_id in token_ids {
-        messages.push(WasmMsg::Execute {
-          contract_addr: contract.clone(),
-          msg: to_json_binary(&Cw721ExecuteMsg::TransferNft {
-            recipient: state.evacuate_address.clone(),
-            token_id: token_id.clone(),
-          })?,
-          funds: vec![],
-        }.into());
-      }
-    }
-  }
+  let evacuate_address = ctx.deps.api.addr_validate(&state.evacuate_address)?;
   Ok(Response::new()
-    .add_messages(messages)
+    .add_messages(r#impl::execute::evacuate(
+      ctx,
+      Token::Native(state.pool),
+      asset,
+      evacuate_address
+    )?)
     .add_attribute("action", "evacuate")
   )
 }
@@ -122,10 +80,15 @@ fn change_evacuate_address(ctx: &mut ExecuteContext, new_address: String) -> Con
 
 #[cfg(test)]
 mod test {
-  use super::*;
   use std::marker::PhantomData;
+
+  use super::*;
+  use r#impl::tokenfactory::osmosis::MsgMint;
+
   use cosmwasm_std::{coin, coins, BankMsg, CosmosMsg, DepsMut, Empty, OwnedDeps, SubMsg, WasmMsg, Decimal};
   use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info, MockApi, MockStorage};
+  use cw20::Cw20ExecuteMsg;
+  use cw721::Cw721ExecuteMsg;
   use prost::Message;
   use test_utils::mock_querier::MockQuerier;
 
@@ -389,7 +352,7 @@ mod test {
         assert_eq!(type_url, "/osmosis.tokenfactory.v1beta1.MsgMint");
 
         // Decode the MsgMint to verify its contents
-        let msg_mint = crate::tokenfactory::MsgMint::decode(value.as_slice()).unwrap();
+        let msg_mint = MsgMint::decode(value.as_slice()).unwrap();
         assert_eq!(msg_mint.sender, env.contract.address.to_string());
         assert_eq!(msg_mint.mint_to_address, "sender");
 
@@ -428,7 +391,7 @@ mod test {
         assert_eq!(type_url, "/osmosis.tokenfactory.v1beta1.MsgMint");
 
         // Decode the MsgMint to verify its contents
-        let msg_mint = crate::tokenfactory::MsgMint::decode(value.as_slice()).unwrap();
+        let msg_mint = MsgMint::decode(value.as_slice()).unwrap();
         assert_eq!(msg_mint.sender, env.contract.address.to_string());
         assert_eq!(msg_mint.mint_to_address, "sender");
 

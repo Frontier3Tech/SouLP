@@ -1,5 +1,8 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cosmwasm_std::Decimal;
+use r#impl::msg::EvacuateAsset;
+
+use crate::state::State;
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -25,20 +28,13 @@ pub enum ExecuteMsg {
 }
 
 #[cw_serde]
-pub enum EvacuateAsset {
-  /// Evacuate all native assets (except the pool token)
-  Native {},
-  /// Evacuate given cw20 asset
-  Cw20 {
-    contract: String,
-  },
-  /// Evacuate given cw721 NFTs
-  Cw721 {
-    contract: String,
-    token_ids: Vec<String>,
-  },
-}
-
-#[cw_serde]
 #[derive(QueryResponses)]
-pub enum QueryMsg {}
+pub enum QueryMsg {
+  /// Get the current state.
+  #[returns(State)]
+  State {},
+
+  /// Get the SouLP token address.
+  #[returns(String)]
+  TokenAddress {},
+}

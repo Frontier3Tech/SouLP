@@ -3,6 +3,8 @@ Permanently locked liquidity tokens.
 
 SouLP wrap DEX liquidity tokens and prevent liquidity from ever being released (provided Admin has been relinquished). The SouLP tokens themselves are tradeable, but the liquidity they represent are locked forever. As such, SouLP tokens represent a commitment to a project's longevity.
 
+SouLP tokens are a great choice for governance tokens as any staked tokens imply permanent liquidity.
+
 As they wrap existing DEX LPs, they must be specialized for the chain & DEX LP variants you wish to support.
 
 # License

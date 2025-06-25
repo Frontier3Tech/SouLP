@@ -6,6 +6,7 @@ use cw2::set_contract_version;
 use crate::error::ContractError;
 use crate::msg::InstantiateMsg;
 use crate::state::{State, STATE};
+use crate::tokenfactory::MsgCreateDenom;
 
 // version info for migration info
 const CONTRACT_NAME: &str = env!("CARGO_PKG_NAME");
@@ -14,7 +15,7 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
   deps: DepsMut,
-  _env: Env,
+  env: Env,
   info: MessageInfo,
   msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
@@ -30,6 +31,13 @@ pub fn instantiate(
 
   Ok(Response::new()
     .add_attribute("method", "instantiate")
+    // NOTE that denom creation may incur a fee. You can query this fee from the module's params:
+    // GET /osmosis/tokenfactory/v1beta1/params
+    // Since the contract doesn't exist at this point yet, the fee must be sent in the `info.funds`.
+    .add_message(MsgCreateDenom {
+      sender: env.contract.address.to_string(),
+      subdenom: "SouLP".to_string(),
+    })
   )
 }
 
